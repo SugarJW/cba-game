@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project CBA - 1v1 幻想篮球对决</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Mode Selection Screen -->
+    <div class="mode-screen" id="modeScreen">
+        <div class="mode-header">
+            <h1 class="game-title">PROJECT CBA</h1>
+            <p class="game-subtitle">1v1 幻想篮球对决</p>
+        </div>
+        
+        <div class="mode-selection">
+            <div class="mode-card" id="singlePlayerMode">
+                <div class="mode-icon">🤖</div>
+                <h2 class="mode-name">单机模式</h2>
+                <p class="mode-desc">SINGLE PLAYER</p>
+                <p class="mode-info">挑战 AI 对手，磨练你的技术</p>
+            </div>
+            
+            <div class="mode-card" id="multiPlayerMode">
+                <div class="mode-icon">👥</div>
+                <h2 class="mode-name">多人模式</h2>
+                <p class="mode-desc">MULTIPLAYER</p>
+                <p class="mode-info">与好友实时对战</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Multiplayer Lobby Screen -->
+    <div class="lobby-screen hidden" id="lobbyScreen">
+        <button class="back-btn" id="lobbyBackBtn">← 返回</button>
+        
+        <div class="lobby-header">
+            <h1 class="lobby-title">多人对战</h1>
+            <p class="lobby-subtitle">MULTIPLAYER LOBBY</p>
+        </div>
+        
+        <div class="lobby-options">
+            <div class="lobby-card" id="createRoomBtn">
+                <div class="lobby-icon">🏠</div>
+                <h2>创建房间</h2>
+                <p>CREATE ROOM</p>
+                <p class="lobby-info">创建一个私人房间，邀请好友加入</p>
+            </div>
+            
+            <div class="lobby-card" id="joinRoomBtn">
+                <div class="lobby-icon">🚪</div>
+                <h2>加入房间</h2>
+                <p>JOIN ROOM</p>
+                <p class="lobby-info">输入房间号加入好友的房间</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Room Screen -->
+    <div class="room-screen hidden" id="createRoomScreen">
+        <button class="back-btn" id="createRoomBackBtn">← 返回</button>
+        
+        <div class="room-content">
+            <h2 class="room-title">房间已创建</h2>
+            <div class="room-code-display">
+                <span class="room-code-label">房间号 ROOM CODE</span>
+                <span class="room-code" id="roomCode">----</span>
+                <button class="copy-btn" id="copyRoomCode">📋 复制</button>
+            </div>
+            
+            <div class="room-info-tip">
+                <span>💡 将房间号发给好友，或在另一个浏览器标签页加入测试</span>
+            </div>
+            
+            <div class="room-players-panel">
+                <div class="room-player-card host">
+                    <div class="rp-header">
+                        <span class="rp-badge">👑 房主</span>
+                        <span class="rp-status ready">已准备</span>
+                    </div>
+                    <div class="rp-avatar" id="hostAvatar">🏀</div>
+                    <div class="rp-name">你</div>
+                    <div class="rp-char-name" id="hostCharName">选择角色</div>
+                </div>
+                
+                <div class="room-vs">VS</div>
+                
+                <div class="room-player-card guest" id="guestCard">
+                    <div class="rp-header">
+                        <span class="rp-badge">👤 玩家2</span>
+                        <span class="rp-status waiting" id="guestStatus">等待中</span>
+                    </div>
+                    <div class="rp-avatar waiting" id="guestAvatar">⏳</div>
+                    <div class="rp-name" id="guestName">等待加入...</div>
+                    <div class="rp-char-name" id="guestCharName">-</div>
+                </div>
+            </div>
+            
+            <div class="room-character-select">
+                <h3>选择你的球员</h3>
+                <div class="room-character-grid" id="roomCharacterGrid">
+                    <!-- Characters populated by JS -->
+                </div>
+            </div>
+            
+            <button class="start-game-btn disabled" id="startMultiplayerBtn">
+                <span>开始比赛</span>
+                <span class="btn-hint">等待对手加入</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Join Room Screen -->
+    <div class="room-screen hidden" id="joinRoomScreen">
+        <button class="back-btn" id="joinRoomBackBtn">← 返回</button>
+        
+        <div class="room-content">
+            <h2 class="room-title">加入房间</h2>
+            
+            <div class="room-input-section">
+                <label class="input-label">输入房间号 ENTER ROOM CODE</label>
+                <div class="room-code-input-wrapper">
+                    <input type="text" class="room-code-input" id="roomCodeInput" 
+                           maxlength="6" placeholder="------" autocomplete="off">
+                </div>
+                <button class="join-btn" id="confirmJoinBtn">加入房间</button>
+            </div>
+            
+            <div class="join-error hidden" id="joinError">
+                <span>❌ 房间不存在或已满</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Waiting Room (After Joining) -->
+    <div class="room-screen hidden" id="waitingRoomScreen">
+        <button class="back-btn" id="waitingRoomBackBtn">← 离开房间</button>
+        
+        <div class="room-content">
+            <h2 class="room-title">已加入房间</h2>
+            <div class="room-code-display small">
+                <span class="room-code-label">房间号</span>
+                <span class="room-code" id="joinedRoomCode">----</span>
+            </div>
+            
+            <div class="room-players-panel">
+                <div class="room-player-card host">
+                    <div class="rp-header">
+                        <span class="rp-badge">👑 房主</span>
+                        <span class="rp-status ready">已准备</span>
+                    </div>
+                    <div class="rp-avatar" id="waitHostAvatar">🏀</div>
+                    <div class="rp-name" id="waitHostName">房主</div>
+                    <div class="rp-char-name" id="waitHostCharName">-</div>
+                </div>
+                
+                <div class="room-vs">VS</div>
+                
+                <div class="room-player-card guest you">
+                    <div class="rp-header">
+                        <span class="rp-badge">👤 你</span>
+                        <span class="rp-status ready">已准备</span>
+                    </div>
+                    <div class="rp-avatar" id="waitGuestAvatar">🏀</div>
+                    <div class="rp-name">你</div>
+                    <div class="rp-char-name" id="waitGuestCharName">选择角色</div>
+                </div>
+            </div>
+            
+            <div class="room-character-select">
+                <h3>选择你的球员</h3>
+                <div class="room-character-grid" id="joinCharacterGrid">
+                    <!-- Characters populated by JS -->
+                </div>
+            </div>
+            
+            <div class="waiting-for-host">
+                <div class="waiting-spinner"></div>
+                <span>等待房主开始比赛...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="game-container hidden" id="gameContainer">
+        <!-- Left Panel - The Locker Room (55%) -->
+        <div class="left-panel" id="leftPanel">
+            <!-- Character Display Section -->
+            <div class="character-section">
+                <div class="character-card">
+                    <div class="card-border">
+                        <div class="card-inner">
+                            <div class="character-avatar" id="playerAvatar">
+                                <div class="avatar-placeholder">
+                                    <span class="avatar-emoji" id="playerEmoji">🐒</span>
+                                </div>
+                            </div>
+                            <div class="character-rarity" id="playerRarity">LEGENDARY</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="character-info">
+                    <div class="character-header">
+                        <h1 class="character-name" id="playerName">孙悟空</h1>
+                        <span class="character-title" id="playerTitle">The Monkey King</span>
+                    </div>
+                    
+                    <div class="stats-container">
+                        <canvas id="radarChart" width="280" height="280"></canvas>
+                    </div>
+                    
+                    <div class="skills-container">
+                        <div class="skill offense-skill">
+                            <div class="skill-icon">⚔️</div>
+                            <div class="skill-info">
+                                <span class="skill-name" id="offenseSkillName">筋斗云</span>
+                                <span class="skill-desc" id="offenseSkillDesc">无视对手碰撞体积，100%完成突破得分</span>
+                            </div>
+                        </div>
+                        <div class="skill defense-skill">
+                            <div class="skill-icon">🛡️</div>
+                            <div class="skill-info">
+                                <span class="skill-name" id="defenseSkillName">火眼金睛</span>
+                                <span class="skill-desc" id="defenseSkillDesc">抢断成功率临时提升50%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Character Selection -->
+            <div class="character-select">
+                <h3>选择球员 SELECT PLAYER</h3>
+                <div class="character-grid" id="characterGrid">
+                    <!-- Characters will be populated by JS -->
+                </div>
+            </div>
+            
+            <!-- Match Control -->
+            <div class="match-control">
+                <div class="win-streak">
+                    <span class="streak-label">连胜</span>
+                    <span class="streak-count" id="winStreak">0</span>
+                </div>
+                <button class="find-match-btn" id="findMatchBtn">
+                    <span class="btn-text">START GAME</span>
+                    <span class="btn-subtext">开始比赛</span>
+                </button>
+                <button class="back-to-menu-btn" id="backToMenuBtn">
+                    <span>返回主菜单</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Right Panel - The Arena (45%) -->
+        <div class="right-panel" id="rightPanel">
+            <div class="arena-overlay" id="arenaOverlay">
+                <div class="waiting-text">
+                    <span class="waiting-icon">🏀</span>
+                    <span>WAITING FOR MATCH...</span>
+                </div>
+            </div>
+            
+            <!-- Scoreboard -->
+            <div class="scoreboard">
+                <div class="score-side player-score">
+                    <span class="score-label">YOU</span>
+                    <span class="score-value" id="playerScore">0</span>
+                </div>
+                <div class="score-center">
+                    <div class="possession-indicator" id="possessionIndicator">
+                        <span class="ball-icon">🏀</span>
+                    </div>
+                    <div class="round-info">
+                        <span id="roundNumber">ROUND 1</span>
+                    </div>
+                </div>
+                <div class="score-side opponent-score">
+                    <span class="score-label">OPP</span>
+                    <span class="score-value" id="opponentScore">0</span>
+                </div>
+            </div>
+            
+            <!-- Court -->
+            <div class="court-container">
+                <svg class="court" viewBox="0 0 400 340" id="courtSvg">
+                    <!-- Court background -->
+                    <rect x="0" y="0" width="400" height="340" fill="#1a472a"/>
+                    
+                    <!-- Court wood texture overlay -->
+                    <defs>
+                        <pattern id="courtPattern" width="40" height="40" patternUnits="userSpaceOnUse">
+                            <rect width="40" height="40" fill="#1a472a"/>
+                            <rect x="0" y="0" width="40" height="2" fill="rgba(255,255,255,0.03)"/>
+                        </pattern>
+                    </defs>
+                    <rect x="0" y="0" width="400" height="340" fill="url(#courtPattern)"/>
+                    
+                    <!-- Court boundary -->
+                    <rect x="10" y="10" width="380" height="320" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2"/>
+                    
+                    <!-- Half court line -->
+                    <line x1="10" y1="40" x2="390" y2="40" stroke="rgba(255,255,255,0.3)" stroke-width="1" stroke-dasharray="5,5"/>
+                    
+                    <!-- Three point arc - pushed back further -->
+                    <path d="M 35 330 L 35 180 Q 200 40 365 180 L 365 330" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="3"/>
+                    
+                    <!-- Three point corner markers -->
+                    <line x1="35" y1="330" x2="35" y2="280" stroke="rgba(255,255,255,0.7)" stroke-width="3"/>
+                    <line x1="365" y1="330" x2="365" y2="280" stroke="rgba(255,255,255,0.7)" stroke-width="3"/>
+                    
+                    <!-- Paint/Key - the restricted area near basket -->
+                    <rect x="130" y="250" width="140" height="80" fill="rgba(255,107,53,0.2)" stroke="rgba(255,255,255,0.6)" stroke-width="2"/>
+                    
+                    <!-- Free throw circle -->
+                    <circle cx="200" cy="250" r="40" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2"/>
+                    
+                    <!-- Restricted area arc (no charge zone) -->
+                    <path d="M 165 330 Q 200 295 235 330" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+                    
+                    <!-- Basket rim -->
+                    <circle cx="200" cy="315" r="9" fill="none" stroke="#ff6b35" stroke-width="3"/>
+                    
+                    <!-- Net indication -->
+                    <ellipse cx="200" cy="318" rx="7" ry="4" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+                    
+                    <!-- Backboard -->
+                    <rect x="165" y="322" width="70" height="6" fill="rgba(255,255,255,0.9)" rx="2"/>
+                    
+                    <!-- Player Token (You - Blue) -->
+                    <g id="playerToken" class="token" data-x="150" data-y="130">
+                        <circle cx="150" cy="130" r="28" fill="none" stroke="rgba(0,212,255,0.4)" stroke-width="2" class="token-glow"/>
+                        <circle cx="150" cy="130" r="22" fill="#1a1a2e" stroke="#00d4ff" stroke-width="3" class="token-circle"/>
+                        <foreignObject x="128" y="108" width="44" height="44">
+                            <div xmlns="http://www.w3.org/1999/xhtml" id="playerTokenAvatar" class="token-avatar token-avatar-player"></div>
+                        </foreignObject>
+                        <text x="150" y="138" text-anchor="middle" fill="#fff" font-size="18" id="playerTokenEmoji">🐒</text>
+                    </g>
+                    
+                    <!-- Opponent Token (Red) -->
+                    <g id="opponentToken" class="token" data-x="250" data-y="130">
+                        <circle cx="250" cy="130" r="28" fill="none" stroke="rgba(255,71,87,0.4)" stroke-width="2" class="token-glow"/>
+                        <circle cx="250" cy="130" r="22" fill="#1a1a2e" stroke="#ff4757" stroke-width="3" class="token-circle"/>
+                        <foreignObject x="228" y="108" width="44" height="44">
+                            <div xmlns="http://www.w3.org/1999/xhtml" id="opponentTokenAvatar" class="token-avatar token-avatar-opponent"></div>
+                        </foreignObject>
+                        <text x="250" y="138" text-anchor="middle" fill="#fff" font-size="18" id="opponentTokenEmoji">🦖</text>
+                    </g>
+                    
+                    <!-- Ball -->
+                    <g id="ballGroup" data-x="150" data-y="115">
+                        <circle id="ballShadow" cx="152" cy="120" r="7" fill="rgba(0,0,0,0.3)"/>
+                        <circle id="ball" cx="150" cy="115" r="9" fill="#ff9f43" stroke="#e17055" stroke-width="2"/>
+                        <path d="M 146 115 Q 150 111 154 115" fill="none" stroke="rgba(0,0,0,0.3)" stroke-width="1"/>
+                        <path d="M 150 106 L 150 124" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="1"/>
+                    </g>
+                </svg>
+                
+                <!-- Skill Trigger Effect -->
+                <div class="skill-trigger-effect" id="skillEffect">
+                    <span class="skill-trigger-text" id="skillEffectText">技能触发!</span>
+                </div>
+                
+                <!-- Court Event Popup (stays on court) -->
+                <div class="court-event" id="courtEvent">
+                    <div class="court-event-text" id="courtEventText">SLAM DUNK!</div>
+                </div>
+            </div>
+            
+            <!-- Full Screen Highlight Effect (for skills only) -->
+            <div class="highlight-overlay" id="highlightOverlay">
+                <div class="highlight-text" id="highlightText">技能发动</div>
+                <div class="highlight-sub" id="highlightSub"></div>
+            </div>
+            
+            <!-- Stat Showdown Overlay -->
+            <div class="stat-showdown" id="statShowdown">
+                <div class="showdown-content">
+                    <div class="showdown-title" id="showdownTitle">数值对决</div>
+                    
+                    <div class="showdown-versus">
+                        <div class="showdown-side showdown-player">
+                            <div class="showdown-avatar" id="showdownPlayerAvatar"></div>
+                            <div class="showdown-name" id="showdownPlayerName">你</div>
+                            <div class="showdown-stat-label" id="showdownPlayerLabel">进攻</div>
+                            <div class="showdown-stat-value" id="showdownPlayerValue">0</div>
+                            <div class="showdown-bar">
+                                <div class="showdown-bar-fill player-bar" id="showdownPlayerBar"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="showdown-vs">
+                            <span class="vs-text">VS</span>
+                            <div class="showdown-dice" id="showdownDice">🎲</div>
+                        </div>
+                        
+                        <div class="showdown-side showdown-opponent">
+                            <div class="showdown-avatar" id="showdownOpponentAvatar"></div>
+                            <div class="showdown-name" id="showdownOpponentName">对手</div>
+                            <div class="showdown-stat-label" id="showdownOpponentLabel">防守</div>
+                            <div class="showdown-stat-value" id="showdownOpponentValue">0</div>
+                            <div class="showdown-bar">
+                                <div class="showdown-bar-fill opponent-bar" id="showdownOpponentBar"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="showdown-result" id="showdownResult">
+                        <span class="result-text" id="showdownResultText"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Match Info Panel (stats comparison) -->
+            <div class="match-info-panel" id="matchInfoPanel">
+                <div class="player-info-side">
+                    <div class="info-name" id="infoPlayerName">你</div>
+                    <div class="info-skill">
+                        <span class="skill-label">⚔️</span>
+                        <span class="skill-text" id="infoPlayerOffense">-</span>
+                    </div>
+                    <div class="info-skill">
+                        <span class="skill-label">🛡️</span>
+                        <span class="skill-text" id="infoPlayerDefense">-</span>
+                    </div>
+                </div>
+                <div class="stats-radar-container">
+                    <canvas id="matchRadarCanvas" width="140" height="140"></canvas>
+                    <div class="radar-legend">
+                        <span class="legend-player">● 你</span>
+                        <span class="legend-opponent">● 对手</span>
+                    </div>
+                </div>
+                <div class="opponent-info-side">
+                    <div class="info-name" id="infoOpponentName">对手</div>
+                    <div class="info-skill">
+                        <span class="skill-label">⚔️</span>
+                        <span class="skill-text" id="infoOpponentOffense">-</span>
+                    </div>
+                    <div class="info-skill">
+                        <span class="skill-label">🛡️</span>
+                        <span class="skill-text" id="infoOpponentDefense">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Bottom Area: Left Tactics, Right Game Log -->
+            <div class="bottom-panel">
+                <!-- Left: Action Bar -->
+                <div class="action-panel" id="actionPanel">
+                    <div class="panel-header">选择战术</div>
+                    <div class="action-bar" id="actionBar">
+                        <button class="action-btn drive-btn" data-action="drive">
+                            <span class="action-icon">🔴</span>
+                            <span class="action-name">冲击篮下</span>
+                            <span class="action-subtext">DRIVE</span>
+                        </button>
+                        <button class="action-btn shoot-btn" data-action="shoot">
+                            <span class="action-icon">🔵</span>
+                            <span class="action-name">寻找空位</span>
+                            <span class="action-subtext">SHOOT</span>
+                        </button>
+                        <button class="action-btn dribble-btn" data-action="dribble">
+                            <span class="action-icon">🟣</span>
+                            <span class="action-name">运球晃人</span>
+                            <span class="action-subtext">DRIBBLE</span>
+                        </button>
+                    </div>
+                    <!-- Opponent Turn Indicator -->
+                    <div class="opponent-turn" id="opponentTurn">
+                        <div class="opponent-action" id="opponentAction">
+                            <span class="action-label">对手选择:</span>
+                            <span class="action-choice" id="opponentChoice">思考中...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right: Game Log -->
+                <div class="log-panel">
+                    <div class="panel-header">📺 实况直播</div>
+                    <div class="game-log" id="gameLog">
+                        <div class="log-entry">欢迎来到 Project CBA！</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Result Modal -->
+    <div class="modal" id="resultModal">
+        <div class="modal-content">
+            <h2 class="result-title" id="resultTitle">VICTORY!</h2>
+            <div class="result-score" id="resultScore">11 - 5</div>
+            <div class="result-mvp" id="resultMvp">MVP: 孙悟空</div>
+            <button class="play-again-btn" id="playAgainBtn">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script src="characters.js"></script>
+    <script src="multiplayer-client.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
