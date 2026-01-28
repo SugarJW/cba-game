@@ -9,18 +9,30 @@
  * 服务器将在 ws://localhost:8080 运行
  */
 
+const http = require('http');
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 
 const PORT = process.env.PORT || 8080;
-const wss = new WebSocket.Server({ port: PORT });
+
+// Create HTTP server for Railway compatibility
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('CBA Multiplayer Server Running');
+});
+
+// Create WebSocket server attached to HTTP server
+const wss = new WebSocket.Server({ server });
 
 // 存储所有房间
 const rooms = new Map();
 // 存储所有连接的玩家
 const players = new Map();
 
-console.log(`🏀 CBA Multiplayer Server running on port ${PORT}`);
+// Start server
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🏀 CBA Multiplayer Server running on port ${PORT}`);
+});
 
 // 生成房间号
 function generateRoomCode() {
@@ -152,7 +164,8 @@ function handleCreateRoom(ws, playerId, message) {
     ws.roomCode = roomCode;
     ws.isHost = true;
     
-    console.log(`Room created: ${roomCode}`);
+    console.log(`Room created: ${roomCode}, total rooms: ${rooms.size}`);
+    console.log(`Active rooms: ${[...rooms.keys()].join(', ')}`);
     
     ws.send(JSON.stringify({
         type: 'room_created',
@@ -164,9 +177,13 @@ function handleCreateRoom(ws, playerId, message) {
 // 加入房间
 function handleJoinRoom(ws, playerId, message) {
     const roomCode = message.roomCode?.toUpperCase();
+    console.log(`Join request for room: ${roomCode}`);
+    console.log(`Available rooms: ${[...rooms.keys()].join(', ') || 'none'}`);
+    
     const room = rooms.get(roomCode);
     
     if (!room) {
+        console.log(`Room ${roomCode} not found`);
         ws.send(JSON.stringify({
             type: 'join_error',
             error: 'ROOM_NOT_FOUND'

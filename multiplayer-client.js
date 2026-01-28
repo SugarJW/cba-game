@@ -136,6 +136,7 @@ class MultiplayerClient {
                 break;
                 
             case 'join_error':
+                console.log('Join error:', message.error);
                 if (this.onJoinError) this.onJoinError(message.error);
                 break;
                 
