@@ -237,5 +237,5 @@ class MultiplayerClient {
     }
 }
 
-// 全局实例
-const multiplayerClient = new MultiplayerClient();
+// 全局实例 - 连接到 Railway 服务器
+const multiplayerClient = new MultiplayerClient('wss://cba-game-production.up.railway.app');
