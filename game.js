@@ -494,35 +494,37 @@ class GameController {
             this.showScreen('mode');
         });
 
-        this.createRoomBtn.addEventListener('click', () => {
-            // Set up callbacks for room events
-            this.roomManager.onStatusChange = (status, data) => {
-                if (status === 'guest_joined') {
-                    this.onOpponentJoined(data);
-                } else if (status === 'room_closed') {
-                    alert('房间已关闭');
-                    this.showScreen('lobby');
-                }
+        this.createRoomBtn.addEventListener('click', async () => {
+            // Use WebSocket multiplayer client
+            await this.connectToServer();
+            
+            // Set up callbacks
+            multiplayerClient.onRoomCreated = (roomCode, room) => {
+                this.roomCodeEl.textContent = roomCode;
+                this.showScreen('createRoom');
+                this.updateCreateRoomUI();
+                this.renderRoomCharacterGrids();
             };
             
-            this.roomManager.onOpponentCharChange = (charIndex) => {
-                if (this.currentScreen === 'createRoom') {
+            multiplayerClient.onPlayerJoined = (guest) => {
+                this.onOpponentJoined(guest);
+            };
+            
+            multiplayerClient.onCharacterUpdated = (charIndex, isHost) => {
+                if (!isHost && this.currentScreen === 'createRoom') {
                     const char = CHARACTERS[charIndex];
                     this.updateRoomAvatar(this.guestAvatar, char);
                     this.guestCharName.textContent = char.name;
                 }
             };
             
-            const roomCode = this.roomManager.createRoom();
-            this.roomCodeEl.textContent = roomCode;
-            this.showScreen('createRoom');
-            this.updateCreateRoomUI();
-            this.renderRoomCharacterGrids();
+            multiplayerClient.onRoomClosed = (reason) => {
+                alert('房间已关闭');
+                this.showScreen('lobby');
+            };
             
-            // Note: In multi-tab testing, real players will join via localStorage sync
-            // The simulateOpponentJoin is disabled to allow real testing
-            // Uncomment below line for single-browser demo with AI opponent:
-            // this.roomManager.simulateOpponentJoin((guest) => this.onOpponentJoined(guest));
+            // Create room on server
+            multiplayerClient.createRoom('房主', this.selectedCharacterIndex);
         });
 
         this.joinRoomBtn.addEventListener('click', () => {
@@ -536,6 +538,9 @@ class GameController {
     bindRoomEvents() {
         // Create Room
         this.createRoomBackBtn.addEventListener('click', () => {
+            if (multiplayerClient.isConnected) {
+                multiplayerClient.leaveRoom();
+            }
             this.roomManager.leaveRoom();
             this.showScreen('lobby');
         });
@@ -552,13 +557,23 @@ class GameController {
         });
 
         this.startMultiplayerBtn.addEventListener('click', () => {
-            if (this.roomManager.canStartGame()) {
-                this.startMultiplayerGame();
+            if (multiplayerClient.isConnected && multiplayerClient.isHost) {
+                multiplayerClient.startGame();
+                // Game will start via onGameStarted callback
             }
         });
+        
+        // Set up game started callback for host
+        multiplayerClient.onGameStarted = (room) => {
+            this.onlineRoom = room;
+            this.startMultiplayerGame();
+        };
 
         // Join Room
         this.joinRoomBackBtn.addEventListener('click', () => {
+            if (multiplayerClient.isConnected) {
+                multiplayerClient.leaveRoom();
+            }
             this.showScreen('lobby');
         });
 
@@ -620,7 +635,10 @@ class GameController {
             el.classList.toggle('selected', i === index);
         });
         
-        // Update room manager
+        // Update server
+        if (multiplayerClient.isConnected) {
+            multiplayerClient.updateCharacter(index);
+        }
         this.roomManager.updateMyCharacter(index);
         
         // Update UI with selected character
@@ -631,6 +649,20 @@ class GameController {
         } else {
             this.updateRoomAvatar(this.waitGuestAvatar, char);
             this.waitGuestCharName.textContent = char.name;
+        }
+    }
+    
+    // Connect to multiplayer server
+    async connectToServer() {
+        if (multiplayerClient.isConnected) return;
+        
+        try {
+            await multiplayerClient.connect();
+            console.log('Connected to multiplayer server');
+        } catch (error) {
+            console.error('Failed to connect to server:', error);
+            alert('无法连接到服务器，请检查网络连接');
+            throw error;
         }
     }
     
@@ -649,7 +681,7 @@ class GameController {
         avatarEl.classList.remove('waiting');
     }
 
-    attemptJoinRoom() {
+    async attemptJoinRoom() {
         const code = this.roomCodeInput.value.trim();
         if (code.length < 4) {
             this.joinError.querySelector('span').textContent = '❌ 请输入完整房间号';
@@ -657,65 +689,61 @@ class GameController {
             return;
         }
 
+        // Connect to server
+        await this.connectToServer();
+        
         // Set up callbacks
-        this.roomManager.onStatusChange = (status, data) => {
-            if (status === 'game_started') {
-                this.startMultiplayerGame();
-            } else if (status === 'room_closed') {
-                alert('房主已离开，房间已关闭');
-                this.showScreen('lobby');
-            }
-        };
-        
-        this.roomManager.onOpponentCharChange = (charIndex) => {
-            if (this.currentScreen === 'waitingRoom') {
-                const char = CHARACTERS[charIndex];
-                this.updateRoomAvatar(this.waitHostAvatar, char);
-                this.waitHostCharName.textContent = char.name;
-            }
-        };
-
-        const result = this.roomManager.joinRoom(code);
-        
-        if (result.success) {
-            this.joinedRoomCode.textContent = code.toUpperCase();
+        multiplayerClient.onRoomJoined = (roomCode, room) => {
+            this.joinedRoomCode.textContent = roomCode;
             
             // Show host's character
-            const hostChar = CHARACTERS[result.room.host.characterIndex] || CHARACTERS[0];
+            const hostChar = CHARACTERS[room.host.characterIndex] || CHARACTERS[0];
             this.updateRoomAvatar(this.waitHostAvatar, hostChar);
-            this.waitHostName.textContent = '房主';
+            this.waitHostName.textContent = room.host.name || '房主';
             this.waitHostCharName.textContent = hostChar.name;
             
             // Show my character
-            const myChar = CHARACTERS[this.roomManager.selectedCharacterIndex] || CHARACTERS[0];
+            const myChar = CHARACTERS[this.selectedCharacterIndex] || CHARACTERS[0];
             this.updateRoomAvatar(this.waitGuestAvatar, myChar);
             this.waitGuestCharName.textContent = myChar.name;
             
             this.showScreen('waitingRoom');
             this.renderRoomCharacterGrids();
-            
-            // Select my character in the grid
-            const grid = this.joinCharacterGrid;
-            grid.querySelectorAll('.room-char-item').forEach((el, i) => {
-                el.classList.toggle('selected', i === this.roomManager.selectedCharacterIndex);
-            });
-            
-            // Simulate host starting game after a delay (for demo)
-            setTimeout(() => {
-                if (this.currentScreen === 'waitingRoom') {
-                    this.startMultiplayerGame();
-                }
-            }, 4000 + Math.random() * 2000);
-        } else {
-            if (result.error === 'ROOM_NOT_FOUND') {
+        };
+        
+        multiplayerClient.onJoinError = (error) => {
+            if (error === 'ROOM_NOT_FOUND') {
                 this.joinError.querySelector('span').textContent = '❌ 房间不存在';
-            } else if (result.error === 'ROOM_FULL') {
+            } else if (error === 'ROOM_FULL') {
                 this.joinError.querySelector('span').textContent = '❌ 房间已满';
+            } else if (error === 'GAME_IN_PROGRESS') {
+                this.joinError.querySelector('span').textContent = '❌ 游戏已开始';
             } else {
                 this.joinError.querySelector('span').textContent = '❌ 加入失败';
             }
             this.joinError.classList.remove('hidden');
-        }
+        };
+        
+        multiplayerClient.onCharacterUpdated = (charIndex, isHost) => {
+            if (isHost && this.currentScreen === 'waitingRoom') {
+                const char = CHARACTERS[charIndex];
+                this.updateRoomAvatar(this.waitHostAvatar, char);
+                this.waitHostCharName.textContent = char.name;
+            }
+        };
+        
+        multiplayerClient.onGameStarted = (room) => {
+            this.onlineRoom = room;
+            this.startMultiplayerGame();
+        };
+        
+        multiplayerClient.onRoomClosed = (reason) => {
+            alert('房主已离开，房间已关闭');
+            this.showScreen('lobby');
+        };
+
+        // Join room on server
+        multiplayerClient.joinRoom(code, '玩家', this.selectedCharacterIndex);
     }
 
     onOpponentJoined(guest) {
@@ -761,30 +789,27 @@ class GameController {
     }
 
     startMultiplayerGame() {
-        // Stop polling and mark game as started
-        if (this.roomManager.isHost) {
-            this.roomManager.startGame();
-        }
-        this.roomManager.stopPolling();
+        // Use online room if available, otherwise fall back to local
+        const room = this.onlineRoom || this.roomManager.currentRoom;
+        const isHost = multiplayerClient.isConnected ? multiplayerClient.isHost : this.roomManager.isHost;
         
         // Set characters based on room selection
-        const playerCharIndex = this.roomManager.selectedCharacterIndex;
-        let opponentCharIndex;
+        let playerCharIndex, opponentCharIndex;
         
-        if (this.roomManager.isHost && this.roomManager.currentRoom?.guest) {
-            opponentCharIndex = this.roomManager.currentRoom.guest.characterIndex;
-        } else if (!this.roomManager.isHost && this.roomManager.currentRoom?.host) {
-            opponentCharIndex = this.roomManager.currentRoom.host.characterIndex;
+        if (isHost) {
+            playerCharIndex = room?.host?.characterIndex || this.selectedCharacterIndex || 0;
+            opponentCharIndex = room?.guest?.characterIndex || 0;
         } else {
-            opponentCharIndex = Math.floor(Math.random() * CHARACTERS.length);
+            playerCharIndex = room?.guest?.characterIndex || this.selectedCharacterIndex || 0;
+            opponentCharIndex = room?.host?.characterIndex || 0;
         }
 
         this.selectedCharacterIndex = playerCharIndex;
         this.selectCharacter(playerCharIndex);
         this.state.opponentCharacter = CHARACTERS[opponentCharIndex];
         this.state.gameMode = GAME_MODE.MULTIPLAYER;
-        this.state.isHost = this.roomManager.isHost;
-        this.state.roomCode = this.roomManager.roomCode;
+        this.state.isHost = isHost;
+        this.state.roomCode = multiplayerClient.roomCode || this.roomManager.roomCode;
 
         this.showScreen('game');
         this.startMatch();
