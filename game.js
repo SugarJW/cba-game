@@ -566,6 +566,7 @@ class GameController {
         // Set up game started callback for host
         multiplayerClient.onGameStarted = (room) => {
             this.onlineRoom = room;
+            this.setupMultiplayerCallbacks();
             this.startMultiplayerGame();
         };
 
@@ -666,6 +667,108 @@ class GameController {
         }
     }
     
+    // Set up multiplayer game callbacks
+    setupMultiplayerCallbacks() {
+        multiplayerClient.onGameAction = (action, data) => {
+            console.log('Received game action:', action, data);
+            this.handleOpponentAction(action, data);
+        };
+    }
+    
+    // Handle action received from opponent
+    async handleOpponentAction(actionType, data) {
+        console.log('Handling opponent action:', actionType, data);
+        
+        if (actionType === 'player_action') {
+            // Opponent made an offensive action - execute it as "opponent turn" on our screen
+            this.addLog(`📡 对手选择了: ${this.getActionName(data.action)}`);
+            // Execute the opponent's action visually
+            await this.executeReceivedOpponentAction(data.action);
+        } else if (actionType === 'action_result') {
+            // Sync the result of an action
+            await this.syncActionResult(data);
+        }
+    }
+    
+    // Execute action that opponent sent us
+    async executeReceivedOpponentAction(action) {
+        this.hideActionBar();
+        
+        const opponent = this.state.opponentCharacter;
+        const player = this.state.playerCharacter;
+        
+        // Show the action
+        this.showOpponentTurn(action);
+        await this.delay(500);
+        
+        // Animate based on action
+        switch(action) {
+            case 'drive':
+                await this.animateDrive(false);
+                break;
+            case 'shoot':
+                const isThree = opponent.stats.threePoint > opponent.stats.midRange;
+                await this.animateShoot(false, isThree);
+                break;
+            case 'dribble':
+                await this.animateDribble(false);
+                break;
+        }
+        
+        // The actual result will come from action_result message
+    }
+    
+    getActionName(action) {
+        const names = {
+            'drive': '突破',
+            'shoot': '投篮', 
+            'dribble': '运球过人'
+        };
+        return names[action] || action;
+    }
+    
+    async syncActionResult(data) {
+        console.log('Syncing action result:', data);
+        
+        // Sync scores from opponent's perspective
+        // Note: opponent sends their view, so we need to flip it
+        this.state.playerScore = data.opponentScore; // Their opponent is us
+        this.state.opponentScore = data.playerScore; // Their player is our opponent
+        
+        this.updateScoreboard();
+        
+        if (data.scored) {
+            this.showScorePopup(true, data.points);
+        }
+        
+        // Sync possession (flip it for our perspective)
+        const theirPossession = data.possession;
+        this.state.possession = theirPossession === 'player' ? 'opponent' : 'player';
+        
+        // Check for win
+        if (this.state.playerScore >= 11) {
+            this.endMatch(true);
+            return;
+        }
+        if (this.state.opponentScore >= 11) {
+            this.endMatch(false);
+            return;
+        }
+        
+        this.resetPositions();
+        
+        // Next turn
+        setTimeout(() => {
+            if (this.state.possession === 'player') {
+                this.showActionBar();
+                this.addLog('🏀 轮到你进攻！', 'skill');
+            } else {
+                this.addLog('⏳ 等待对手行动...', 'normal');
+                this.showOpponentTurn(null);
+            }
+        }, 1000);
+    }
+    
     updateRoomAvatar(avatarEl, char) {
         if (!avatarEl) return;
         
@@ -734,6 +837,7 @@ class GameController {
         
         multiplayerClient.onGameStarted = (room) => {
             this.onlineRoom = room;
+            this.setupMultiplayerCallbacks();
             this.startMultiplayerGame();
         };
         
@@ -1030,13 +1134,20 @@ class GameController {
         // Show game mode in log
         if (this.state.gameMode === GAME_MODE.MULTIPLAYER) {
             this.addLog(`[多人模式] 房间号: ${this.state.roomCode || 'N/A'}`);
+            // In multiplayer, host attacks first
+            if (this.state.isHost) {
+                this.state.possession = 'player';
+                this.addLog('🏀 你是房主，先攻！');
+            } else {
+                this.state.possession = 'opponent';
+                this.addLog('🏀 房主先攻，等待对手...');
+            }
         } else {
             this.addLog('[单机模式] VS AI 对手');
         }
 
         this.addLog(`🏀 比赛开始！`);
         this.addLog(`${this.state.playerCharacter.name} VS ${this.state.opponentCharacter.name}`);
-        this.addLog(`${this.state.possession === 'player' ? '你' : '对手'}获得发球权`);
 
         // Reset positions
         this.resetPositions();
@@ -1045,7 +1156,13 @@ class GameController {
         if (this.state.possession === 'player') {
             this.showActionBar();
         } else {
-            this.executeOpponentTurn();
+            // In multiplayer, wait for opponent's action
+            if (this.state.gameMode === GAME_MODE.MULTIPLAYER && multiplayerClient.isConnected) {
+                this.addLog('⏳ 等待对手行动...', 'normal');
+                this.showOpponentTurn(null);
+            } else {
+                this.executeOpponentTurn();
+            }
         }
 
         this.updatePityGlow();
@@ -1287,6 +1404,11 @@ class GameController {
 
     async executePlayerAction(action) {
         this.hideActionBar();
+        
+        // In multiplayer, send action to opponent
+        if (this.state.gameMode === GAME_MODE.MULTIPLAYER && multiplayerClient.isConnected) {
+            multiplayerClient.sendGameAction('player_action', { action: action });
+        }
         
         try {
             const player = this.state.playerCharacter;
@@ -1710,12 +1832,30 @@ class GameController {
         this.resetPositions();
         this.updatePityGlow();
 
+        // In multiplayer, send result to opponent
+        if (this.state.gameMode === GAME_MODE.MULTIPLAYER && multiplayerClient.isConnected) {
+            multiplayerClient.sendGameAction('action_result', {
+                scored: success,
+                points: points,
+                isOpponent: !isPlayer, // From opponent's perspective
+                playerScore: this.state.playerScore,
+                opponentScore: this.state.opponentScore,
+                possession: this.state.possession
+            });
+        }
+
         // Next turn
         setTimeout(() => {
             if (this.state.possession === 'player') {
                 this.showActionBar();
             } else {
-                this.executeOpponentTurn();
+                // In multiplayer, wait for opponent's action instead of AI
+                if (this.state.gameMode === GAME_MODE.MULTIPLAYER && multiplayerClient.isConnected) {
+                    this.addLog('⏳ 等待对手行动...', 'normal');
+                    this.showOpponentTurn(null);
+                } else {
+                    this.executeOpponentTurn();
+                }
             }
         }, 1000);
     }
